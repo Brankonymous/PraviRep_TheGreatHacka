@@ -8,16 +8,13 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, make_scorer
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, make_scorer, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import GridSearchCV
 
 def get_model(model_name):
 
     if model_name == 'logistic_regression':
         return LogisticRegression()
-    
-    elif model_name == 'knn':
-        return KNeighborsClassifier()
     
     elif model_name == 'svm':
         return SVC()
@@ -26,7 +23,7 @@ def get_model(model_name):
         return RandomForestClassifier()
     
     elif model_name == 'xgboost':
-        return xgb.XGBClassifier()
+        return xgb.XGBRegressor()
     
     elif model_name == 'naive_bayes':
         return GaussianNB()
@@ -36,9 +33,13 @@ def get_model(model_name):
     
 
 name = "xgboost"
-dataset_path = ""
-X = pd.read_csv(dataset_path + "train.csv")
-y = pd.read_csv(dataset_path + "train_labels.csv")
+dataset_path = "data/"
+X = pd.read_csv(dataset_path + "bg.csv")
+y = pd.read_csv(dataset_path + "bg_target.csv")
+
+X.drop(['Unnamed: 0', '0', '1', '2', '31', '60', '89', '118', '147', '176', '205', '234', '263'], axis=1, inplace=True) # IZBACIO SAM DATUME OVDE
+y.drop(['Unnamed: 0'], axis=1, inplace=True)
+y = y['0'] # SAMO JEDAN DAN PREDVIDJAMO
 
 model = get_model(name)
 pipeline = Pipeline([
@@ -46,11 +47,12 @@ pipeline = Pipeline([
             ('model', model)
             ])
 
-param_grid = {"model__min_depth":[4, 5, 6]} # podesiti po zelji; prima i distribucije 
+param_grid = {} # podesiti po zelji; prima i distribucije 
 scoring = {
-        'accuracy': make_scorer(accuracy_score)
+        'mse': make_scorer(mean_squared_error),
+        'mae': make_scorer(mean_absolute_error),
 }
-clf = GridSearchCV(pipeline, param_grid, cv = None, scoring=scoring, n_iter=1, refit='accuracy', error_score="raise")
+clf = GridSearchCV(pipeline, param_grid, cv = 10, scoring=scoring, refit='mae', error_score="raise")
 
 grid_search = clf.fit(X, y)
 
