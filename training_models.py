@@ -14,25 +14,9 @@ from sklearn.model_selection import GridSearchCV
 from prophet.diagnostics import cross_validation, performance_metrics
 from prophet.serialize import model_to_json, model_from_json
 
-def get_pred_from_prophet(dates):
-    dataset_path = "data/"
+from utils import load_train_test
+from datetime import datetime, timedelta
 
-    with open('models/prophet.json', 'r') as fin:
-        m = model_from_json(fin.read())  # Load model
-
-    future = pd.DataFrame({'ds': dates})
-    future['floor'] = 0
-    future['cap'] = 2500
-
-    forecast = m.predict(future)
-
-    ans = []
-    for forecast_row in forecast.itertuples():
-        val = int(forecast_row.yhat)
-        val = max(0, val)
-        ans.append(val)
-
-    return ans
 
 def get_model(model_name):
 
@@ -54,13 +38,49 @@ def get_model(model_name):
     else:
         raise ValueError(f'Unknown model name: {name}')
     
+def get_pred_from_prophet(dates):
+    dataset_path = "data/"
+
+    with open('models/prophet.json', 'r') as fin:
+        m = model_from_json(fin.read())  # Load model
+
+    future = pd.DataFrame({'ds': dates})
+    future['floor'] = 0
+    future['cap'] = 2500
+
+    forecast = m.predict(future)
+
+    ans = []
+    for forecast_row in forecast.itertuples():
+        val = int(forecast_row.yhat)
+        val = max(0, val)
+        ans.append(val)
+
+    return ans
+
+def add_prophet_features(df):
+    date_columns = [i*27 for i in range(0, 10)]
+
+    last_dates = list(df[date_columns[-1]])
+    last_dates = [datetime.strptime(last_date, '%Y-%m-%d') for last_date in last_dates]
+
+    day11 = [last_date + timedelta(days=1) for last_date in last_dates]
+    day11 = [d.strftime('%Y-%m-%d') for d in day11]
+
+    day12 = [last_date + timedelta(days=2) for last_date in last_dates]
+    day12 = [d.strftime('%Y-%m-%d') for d in day12]
+
+    day13 = [last_date + timedelta(days=3) for last_date in last_dates]
+    day13 = [d.strftime('%Y-%m-%d') for d in day13]
+
+    df['prophet_1'] = get_pred_from_prophet(day11)
+    df['prophet_2'] = get_pred_from_prophet(day12)
+    df['prophet_3'] = get_pred_from_prophet(day13)
+
+    return df
+    
 def handle_dates(df, keep_date=False):
-    date_columns = ['2', '31', '60', '89', '118', '147', '176', '205', '234', '263']
-
-    # for col in date_columns:
-    #     dates = list(df[col])
-    #     df['prophet_' + col] = get_pred_from_prophet(dates)
-
+    date_columns = [i*27 for i in range(0, 10)]
     if keep_date:
         for col in date_columns:
             df[col] = pd.to_datetime(df[col])
@@ -74,15 +94,32 @@ def handle_dates(df, keep_date=False):
 
     return df
 
+def return_data_location(location):
+    X_train_loc = pd.DataFrame(X_train[location])
+    y_loc = y[location]
+    X_test_loc = pd.DataFrame(X_test[location])
+
+    return X_train_loc, y_loc, X_test_loc
+
+def return_targets_day(y_loc, day):
+    y_loc_day = [x[day] for x in y_loc]
+    
+    return y_loc_day
+
+
 name = "xgboost"
 dataset_path = "data/"
-X = pd.read_csv(dataset_path + "bg.csv")
-y = pd.read_csv(dataset_path + "bg_target.csv")
 
-X.drop(['Unnamed: 0', '0', '1'], axis=1, inplace=True) # IZBACIO SAM DATUME OVDE
-X = handle_dates(X, keep_date=True)
-y.drop(['Unnamed: 0'], axis=1, inplace=True)
-y = y['0'] # SAMO JEDAN DAN PREDVIDJAMO
+X_train, y, X_test = load_train_test(dataset_path + "pollen_train.csv", dataset_path + "pollen_test.csv")
+X_train_loc, y_loc, X_test_loc = return_data_location('БЕОГРАД - НОВИ БЕОГРАД')
+X_train_loc = add_prophet_features(X_train_loc)
+X_test_loc = add_prophet_features(X_test_loc)
+
+X_train_loc = handle_dates(X_train_loc)
+X_test_loc = handle_dates(X_test_loc)
+
+X = X_train_loc
+y = return_targets_day(y_loc, 0)
 
 model = get_model(name)
 pipeline = Pipeline([
