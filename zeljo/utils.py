@@ -7,7 +7,7 @@ def reshape_data(df, target = 'AMBROSIA', stride = 1, train = True):
     if not train:
        upper = 10
     X = []
-    y = []*3
+    y = []
     for i in range(0, df.shape[0] - (upper - 1), stride):
         lst = []
 
